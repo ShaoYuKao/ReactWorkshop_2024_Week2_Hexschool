@@ -176,6 +176,10 @@ function App() {
       axios.defaults.headers.common["Authorization"] = undefined;
       clearToken();
       setIsAuth(false);
+      setFormData({
+        username: "",
+        password: "",
+      });
       setIsLoading(false);
     }
   };
