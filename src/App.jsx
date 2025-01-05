@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import axios from "axios";
+import Loading from "react-fullscreen-loading";
 
 const API_BASE = "https://ec-course-api.hexschool.io/v2";
 const API_PATH = "202501-react-shaoyu";
@@ -14,6 +15,7 @@ function App() {
   const [isAuth, setIsAuth] = useState(false);
   const [products, setProducts] = useState([]);
   const [tempProduct, setTempProduct] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     // 取出 Token
@@ -33,6 +35,7 @@ function App() {
   }, [isAuth]);
 
   const checkAdmin = async (token) => {
+    setIsLoading(true);
     const url = `${API_BASE}/api/user/check`;
     axios.defaults.headers.common.Authorization = token;
     try {
@@ -43,8 +46,10 @@ function App() {
 
       // 清除 Token
       document.cookie = "hexToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-      
+
       setIsAuth(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -71,6 +76,7 @@ function App() {
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     try {
       const response = await axios.post(`${API_BASE}/admin/signin`, formData);
       const { token, expired } = response.data;
@@ -85,6 +91,8 @@ function App() {
       setIsAuth(true);
     } catch (error) {
       console.error("登入失敗", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -96,6 +104,7 @@ function App() {
    * @throws 取得產品資料失敗時拋出錯誤。
    */
   const fetchProducts = async () => {
+    setIsLoading(true);
     try {
       const response = await axios.get(
         `${API_BASE}/api/${API_PATH}/admin/products`
@@ -103,11 +112,14 @@ function App() {
       setProducts(response.data.products);
     } catch (error) {
       console.error("取得產品資料失敗", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <>
+      <Loading loading={isLoading} background="#2ecc71" loaderColor="#3498db" />
       {isAuth ? (
         <div className="container">
           <div className="row mt-5">
