@@ -10,15 +10,13 @@ function App() {
   const [formData, setFormData] = useState({
     username: "",
     password: "",
-  });
-
+  }); // 登入表單資料
   const [isAuth, setIsAuth] = useState(false);  // 是否為管理員
   const [products, setProducts] = useState([]); // 產品列表
   const [tempProduct, setTempProduct] = useState(null); // 單一產品細節
   const [isLoading, setIsLoading] = useState(false); // 是否載入中
   const [pagination, setPagination] = useState({
     "total_pages": 1,
-    // "current_page": 1,
     "has_pre": false,
     "has_next": false,
     "category": ""
@@ -27,13 +25,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1); // 目前頁數
 
   useEffect(() => {
-    // 取出 Token
-    const token = document.cookie.replace(
-      /(?:(?:^|.*;\s*)hexToken\s*=\s*([^;]*).*$)|^.*$/,
-      "$1"
-    );
-    if (token) {
-      checkAdmin(token);
+    if (getToken()) {
+      checkAdmin();
     }
   }, []);
 
@@ -53,7 +46,10 @@ function App() {
    * @param {string} token - 用於驗證的使用者 Token。
    * @returns {Promise<void>} - 不返回任何值的 Promise。
    */
-  const checkAdmin = async (token) => {
+  const checkAdmin = async () => {
+    const token = getToken();
+    if (!token) return;
+
     setIsLoading(true);
 
     const url = `${API_BASE}/api/user/check`;
@@ -68,10 +64,7 @@ function App() {
       setIsAuth(true);
     } catch (error) {
       console.error("使用者驗證失敗", error);
-
-      // 清除 Token
-      document.cookie = "hexToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-
+      clearToken();
       setIsAuth(false);
     } finally {
       setIsLoading(false);
@@ -155,7 +148,61 @@ function App() {
       setIsLoading(false);
     }
   };
+  
+  /**
+   * 執行登出操作的非同步函式。
+   * 
+   * 此函式會向伺服器發送登出請求，並根據伺服器回應的結果進行處理。
+   * 如果登出成功，會清除瀏覽器中的 cookie 並更新認證狀態。
+   * 如果登出失敗，會在控制台顯示錯誤訊息。
+   * 
+   * @async
+   * @function logout
+   * @throws {Error} 如果伺服器回應登出失敗，會拋出錯誤。
+   */
+  const logout = async () => {
+    setIsLoading(true);
+    const url = `${API_BASE}/logout`;
 
+    try {
+      const res = await axios.post(url);
+      const { success, message } = res.data;
+      if (!success) {
+        throw new Error(message);
+      }
+    } catch (error) {
+      console.error("登出失敗", error);
+    } finally {
+      axios.defaults.headers.common["Authorization"] = undefined;
+      clearToken();
+      setIsAuth(false);
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * 取得 Cookie 中的 hexToken
+   * @returns {string|null} 返回 Token 字串，如果不存在則返回 null
+   */
+  const getToken = () => {
+    // 取出 Token
+    const token = document.cookie.replace(
+      /(?:(?:^|.*;\s*)hexToken\s*=\s*([^;]*).*$)|^.*$/,
+      "$1"
+    );
+    return token || null;
+  };
+
+  /**
+   * 清除 Token
+   * 此函式會將名為 "hexToken" 的 cookie 設定為過期，從而達到清除 Token 的效果。
+   */
+  const clearToken = () => {
+    // 清除 Token
+    document.cookie = "hexToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  };
+
+  // === 頁數群組 start ===
   // 每個群組包含的頁數，預設設定為 5
   const pagesPerGroup = 5;
 
@@ -191,133 +238,143 @@ function App() {
       setCurrentPage(newCurrentPage);
     }
   };
+  // === 頁數群組 end ===
 
   return (
     <>
       <Loading loading={isLoading} background="rgba(46, 204, 113, 0.5)" loaderColor="#3498db" />
       {isAuth ? (
-        <div className="container">
-          <div className="row mt-5">
-            <div className="col-md-6">
-              <h2>產品列表</h2>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>產品名稱</th>
-                    <th>原價</th>
-                    <th>售價</th>
-                    <th>是否啟用</th>
-                    <th>查看細節</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products && products.length > 0 ? (
-                    products.map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.title}</td>
-                        <td>{item.origin_price}</td>
-                        <td>{item.price}</td>
-                        <td>{item.is_enabled ? "啟用" : "未啟用"}</td>
-                        <td>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => setTempProduct(item)}
-                          >
-                            查看細節
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
+        <>
+          <div className="container mt-3">
+            <button 
+              type="button" 
+              className="btn btn-outline-secondary d-block ms-auto"
+              onClick={logout}
+            >登出</button>
+          </div>
+
+          <div className="container text-center">
+            <div className="row mt-5">
+              <div className="col-md-6">
+                <h2>產品列表</h2>
+                <table className="table">
+                  <thead>
                     <tr>
-                      <td colSpan="5">尚無產品資料</td>
+                      <th>產品名稱</th>
+                      <th>原價</th>
+                      <th>售價</th>
+                      <th>是否啟用</th>
+                      <th>查看細節</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {products && products.length > 0 ? (
+                      products.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.title}</td>
+                          <td>{item.origin_price}</td>
+                          <td>{item.price}</td>
+                          <td>{item.is_enabled ? "啟用" : "未啟用"}</td>
+                          <td>
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => setTempProduct(item)}
+                            >
+                              查看細節
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5">尚無產品資料</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
 
-              {/* 分頁 (Pagination) */}
-              { pagination.total_pages > 1 && (
-                <div className="d-flex justify-content-end">
-                  <nav aria-label="Page navigation">
-                    <ul className="pagination">
-                      <li className={"page-item " + (pagination.has_pre
- ? "" : "disabled")}>
-                        <a className="page-link" href="#" aria-label="Previous" onClick={handlePrevious}>
-                          <span aria-hidden="true">&laquo;</span>
-                        </a>
-                      </li>
+                {/* 分頁 (Pagination) */}
+                { pagination.total_pages > 1 && (
+                  <div className="d-flex justify-content-end">
+                    <nav aria-label="Page navigation">
+                      <ul className="pagination">
+                        <li className={"page-item " + (pagination.has_pre ? "" : "disabled")}>
+                          <a className="page-link" href="#" aria-label="Previous" onClick={handlePrevious}>
+                            <span aria-hidden="true">&laquo;</span>
+                          </a>
+                        </li>
 
-                      {[...Array(pagesPerGroup)].map((_, index) => {
-                        const pageNumber = currentGroup * pagesPerGroup + index + 1;
-                        if (pageNumber > pagination.total_pages) return null;
-                        return (
-                          <li 
-                            className={"page-item " + (currentPage === Number(pageNumber) ? "active" : "") } 
-                            key={pageNumber}
-                            onClick={() => setCurrentPage(pageNumber)}
-                          >
-                            <a className="page-link" href="#">{pageNumber}</a>
-                          </li>
-                        );
-                      })}
-                     
-                      <li className="page-item">
-                        <a className={"page-link " + (pagination.has_next ? "" : "disabled")} href="#" aria-label="Next" onClick={handleNext}>
-                          <span aria-hidden="true">&raquo;</span>
-                        </a>
-                      </li>
-                    </ul>
-                  </nav>
-                </div>
-              )}
+                        {[...Array(pagesPerGroup)].map((_, index) => {
+                          const pageNumber = currentGroup * pagesPerGroup + index + 1;
+                          if (pageNumber > pagination.total_pages) return null;
+                          return (
+                            <li 
+                              className={"page-item " + (currentPage === Number(pageNumber) ? "active" : "") } 
+                              key={pageNumber}
+                              onClick={() => setCurrentPage(pageNumber)}
+                            >
+                              <a className="page-link" href="#">{pageNumber}</a>
+                            </li>
+                          );
+                        })}
+                      
+                        <li className={"page-item " + (pagination.has_next ? "" : "disabled")}>
+                          <a className="page-link" href="#" aria-label="Next" onClick={handleNext} >
+                            <span aria-hidden="true">&raquo;</span>
+                          </a>
+                        </li>
+                      </ul>
+                    </nav>
+                  </div>
+                )}
 
-            </div>
-            <div className="col-md-6">
-              <h2>單一產品細節</h2>
-              {tempProduct ? (
-                <div className="card mb-3">
-                  <img
-                    src={tempProduct.imageUrl}
-                    className="card-img-top primary-image"
-                    alt="主圖"
-                  />
-                  <div className="card-body">
-                    <h5 className="card-title">
-                      {tempProduct.title}
-                      <span className="badge bg-primary ms-2">
-                        {tempProduct.category}
-                      </span>
-                    </h5>
-                    <p className="card-text">
-                      商品描述：{tempProduct.category}
-                    </p>
-                    <p className="card-text">商品內容：{tempProduct.content}</p>
-                    <div className="d-flex">
-                      <p className="card-text text-secondary">
-                        <del>{tempProduct.origin_price}</del>
+              </div>
+              <div className="col-md-6">
+                <h2>單一產品細節</h2>
+                {tempProduct ? (
+                  <div className="card mb-3">
+                    <img
+                      src={tempProduct.imageUrl}
+                      className="card-img-top primary-image"
+                      alt="主圖"
+                    />
+                    <div className="card-body">
+                      <h5 className="card-title">
+                        {tempProduct.title}
+                        <span className="badge bg-primary ms-2">
+                          {tempProduct.category}
+                        </span>
+                      </h5>
+                      <p className="card-text">
+                        商品描述：{tempProduct.category}
                       </p>
-                      元 / {tempProduct.price} 元
-                    </div>
-                    <h5 className="mt-3">更多圖片：</h5>
-                    <div className="d-flex flex-wrap">
-                      {tempProduct.imagesUrl?.map((url, index) => (
-                        <img
-                          key={index}
-                          src={url}
-                          className="images m-2"
-                          alt="副圖"
-                        />
-                      ))}
+                      <p className="card-text">商品內容：{tempProduct.content}</p>
+                      <div className="d-flex">
+                        <p className="card-text text-secondary">
+                          <del>{tempProduct.origin_price}</del>
+                        </p>
+                        元 / {tempProduct.price} 元
+                      </div>
+                      <h5 className="mt-3">更多圖片：</h5>
+                      <div className="d-flex flex-wrap">
+                        {tempProduct.imagesUrl?.map((url, index) => (
+                          <img
+                            key={index}
+                            src={url}
+                            className="images m-2"
+                            alt="副圖"
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <p className="text-secondary">請選擇一個商品查看</p>
-              )}
+                ) : (
+                  <p className="text-secondary">請選擇一個商品查看</p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       ) : (
         <div className="container login">
           <div className="row justify-content-center">
