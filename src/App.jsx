@@ -12,10 +12,19 @@ function App() {
     password: "",
   });
 
-  const [isAuth, setIsAuth] = useState(false);
-  const [products, setProducts] = useState([]);
-  const [tempProduct, setTempProduct] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isAuth, setIsAuth] = useState(false);  // 是否為管理員
+  const [products, setProducts] = useState([]); // 產品列表
+  const [tempProduct, setTempProduct] = useState(null); // 單一產品細節
+  const [isLoading, setIsLoading] = useState(false); // 是否載入中
+  const [pagination, setPagination] = useState({
+    "total_pages": 1,
+    // "current_page": 1,
+    "has_pre": false,
+    "has_next": false,
+    "category": ""
+  }); // 分頁資訊
+  const [currentGroup, setCurrentGroup] = useState(0); // 目前群組索引
+  const [currentPage, setCurrentPage] = useState(1); // 目前頁數
 
   useEffect(() => {
     // 取出 Token
@@ -34,12 +43,28 @@ function App() {
     }
   }, [isAuth]);
 
+  useEffect(() => {
+    fetchProducts();
+  }, [currentPage]);
+  
+  /**
+   * 檢查使用者是否為管理員。
+   *
+   * @param {string} token - 用於驗證的使用者 Token。
+   * @returns {Promise<void>} - 不返回任何值的 Promise。
+   */
   const checkAdmin = async (token) => {
     setIsLoading(true);
+
     const url = `${API_BASE}/api/user/check`;
     axios.defaults.headers.common.Authorization = token;
+
     try {
-      await axios.post(url);
+      const res = await axios.post(url);
+      const { success } = res.data;
+      if (!success) {
+        throw new Error("使用者驗證失敗");
+      }
       setIsAuth(true);
     } catch (error) {
       console.error("使用者驗證失敗", error);
@@ -76,7 +101,9 @@ function App() {
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     setIsLoading(true);
+
     try {
       const response = await axios.post(`${API_BASE}/admin/signin`, formData);
       const { token, expired } = response.data;
@@ -104,11 +131,23 @@ function App() {
    * @throws 取得產品資料失敗時拋出錯誤。
    */
   const fetchProducts = async () => {
+    if (!isAuth) return;
+
     setIsLoading(true);
+
     try {
       const response = await axios.get(
-        `${API_BASE}/api/${API_PATH}/admin/products`
+        `${API_BASE}/api/${API_PATH}/admin/products?page=${currentPage}`
       );
+      const { total_pages, current_page, has_pre, has_next, category } = response.data.pagination;
+      setPagination({
+        ...pagination,
+        total_pages: total_pages,
+        // current_page: current_page,
+        has_pre: has_pre,
+        has_next: has_next,
+        category: category
+      });
       setProducts(response.data.products);
     } catch (error) {
       console.error("取得產品資料失敗", error);
@@ -117,9 +156,45 @@ function App() {
     }
   };
 
+  // 每個群組包含的頁數，預設設定為 5
+  const pagesPerGroup = 5;
+
+  // 計算總共有多少個群組數
+  const totalGroups = Math.ceil(pagination.total_pages / pagesPerGroup);
+
+  /**
+   * 處理下一個群組的邏輯。
+   * 如果目前的群組索引小於總群組數減一，則將目前的群組索引加一。
+   */
+  const handleNext = () => {
+    if (currentGroup < totalGroups - 1) {
+      setCurrentGroup(currentGroup + 1);
+    }
+
+    const newCurrentPage = currentPage + 1;
+    if (newCurrentPage <= pagination.total_pages) {
+      setCurrentPage(newCurrentPage);
+    }
+  };
+
+  /**
+   * 處理上一組的邏輯。
+   * 如果 currentGroup 大於 0，則將 currentGroup 減 1。
+   */
+  const handlePrevious = () => {
+    if (currentGroup > 0) {
+      setCurrentGroup(currentGroup - 1);
+    }
+
+    const newCurrentPage = currentPage - 1;
+    if (newCurrentPage > 0) {
+      setCurrentPage(newCurrentPage);
+    }
+  };
+
   return (
     <>
-      <Loading loading={isLoading} background="#2ecc71" loaderColor="#3498db" />
+      <Loading loading={isLoading} background="rgba(46, 204, 113, 0.5)" loaderColor="#3498db" />
       {isAuth ? (
         <div className="container">
           <div className="row mt-5">
@@ -160,6 +235,43 @@ function App() {
                   )}
                 </tbody>
               </table>
+
+              {/* 分頁 (Pagination) */}
+              { pagination.total_pages > 1 && (
+                <div className="d-flex justify-content-end">
+                  <nav aria-label="Page navigation">
+                    <ul className="pagination">
+                      <li className={"page-item " + (pagination.has_pre
+ ? "" : "disabled")}>
+                        <a className="page-link" href="#" aria-label="Previous" onClick={handlePrevious}>
+                          <span aria-hidden="true">&laquo;</span>
+                        </a>
+                      </li>
+
+                      {[...Array(pagesPerGroup)].map((_, index) => {
+                        const pageNumber = currentGroup * pagesPerGroup + index + 1;
+                        if (pageNumber > pagination.total_pages) return null;
+                        return (
+                          <li 
+                            className={"page-item " + (currentPage === Number(pageNumber) ? "active" : "") } 
+                            key={pageNumber}
+                            onClick={() => setCurrentPage(pageNumber)}
+                          >
+                            <a className="page-link" href="#">{pageNumber}</a>
+                          </li>
+                        );
+                      })}
+                     
+                      <li className="page-item">
+                        <a className={"page-link " + (pagination.has_next ? "" : "disabled")} href="#" aria-label="Next" onClick={handleNext}>
+                          <span aria-hidden="true">&raquo;</span>
+                        </a>
+                      </li>
+                    </ul>
+                  </nav>
+                </div>
+              )}
+
             </div>
             <div className="col-md-6">
               <h2>單一產品細節</h2>
@@ -193,7 +305,7 @@ function App() {
                         <img
                           key={index}
                           src={url}
-                          className="images"
+                          className="images m-2"
                           alt="副圖"
                         />
                       ))}
