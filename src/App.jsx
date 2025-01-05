@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
-import './App.css'
-import axios from 'axios'
+import { useState, useEffect } from "react";
+import "./App.css";
+import axios from "axios";
 
 const API_BASE = "https://ec-course-api.hexschool.io/v2";
 const API_PATH = "202501-react-shaoyu";
@@ -16,14 +16,41 @@ function App() {
   const [tempProduct, setTempProduct] = useState(null);
 
   useEffect(() => {
+    // 取出 Token
+    const token = document.cookie.replace(
+      /(?:(?:^|.*;\s*)hexToken\s*=\s*([^;]*).*$)|^.*$/,
+      "$1"
+    );
+    if (token) {
+      checkAdmin(token);
+    }
+  }, []);
+
+  useEffect(() => {
     if (isAuth) {
       fetchProducts();
     }
   }, [isAuth]);
 
+  const checkAdmin = async (token) => {
+    const url = `${API_BASE}/api/user/check`;
+    axios.defaults.headers.common.Authorization = token;
+    try {
+      await axios.post(url);
+      setIsAuth(true);
+    } catch (error) {
+      console.error("使用者驗證失敗", error);
+
+      // 清除 Token
+      document.cookie = "hexToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      
+      setIsAuth(false);
+    }
+  };
+
   /**
    * 處理輸入變更事件的函式。
-   * 
+   *
    * @param {Object} e - 事件對象。
    * @param {string} e.target.id - 觸發事件的元素的 ID。
    * @param {string} e.target.value - 觸發事件的元素的值。
@@ -37,7 +64,7 @@ function App() {
   };
 
   /**
-   * 處理表單提交的異步函數。
+   * 使用者點擊[登入]按鈕，處理表單提交的異步函數。
    * @param {Event} e - 表單提交事件。
    * @returns {Promise<void>} - 無返回值的 Promise。
    * @throws 會在登入失敗時拋出錯誤。
@@ -46,8 +73,15 @@ function App() {
     e.preventDefault();
     try {
       const response = await axios.post(`${API_BASE}/admin/signin`, formData);
-      const { token } = response.data;
-      axios.defaults.headers.common['Authorization'] = token;
+      const { token, expired } = response.data;
+
+      // 寫入 cookie token
+      // expires 設置有效時間
+      document.cookie = `hexToken=${token};expires=${new Date(
+        expired
+      )}; path=/`;
+
+      axios.defaults.headers.common["Authorization"] = token;
       setIsAuth(true);
     } catch (error) {
       console.error("登入失敗", error);
@@ -63,7 +97,9 @@ function App() {
    */
   const fetchProducts = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/${API_PATH}/admin/products`);
+      const response = await axios.get(
+        `${API_BASE}/api/${API_PATH}/admin/products`
+      );
       setProducts(response.data.products);
     } catch (error) {
       console.error("取得產品資料失敗", error);
@@ -202,7 +238,7 @@ function App() {
         </div>
       )}
     </>
-  )
+  );
 }
 
-export default App
+export default App;
